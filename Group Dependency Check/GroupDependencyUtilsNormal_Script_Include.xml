@@ -1,0 +1,518 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<unload unload_date="2021-05-08 15:43:44">
+<sys_script_include action="INSERT_OR_UPDATE">
+<access>package_private</access>
+<active>true</active>
+<api_name>global.GroupDependencyUtilsNormal</api_name>
+<caller_access/>
+<client_callable>false</client_callable>
+<description>This is utils for checking group dependency.</description>
+<name>GroupDependencyUtilsNormal</name>
+<script><![CDATA[var GroupDependencyUtilsNormal = Class.create();
+GroupDependencyUtilsNormal.prototype = {
+    initialize: function() {},
+
+    getGroupDependency: function(groupName, groupSys_ID) {
+        var results = 'Group Dependency for group name: ' + groupName + ' - group sys_id: ' + groupSys_ID + '\n';
+        var queryString = '';
+        //Active Tasks
+        results += this.checkActiveTasks(groupSys_ID, groupName);
+        //Email NOtifications
+        results += this.checkEmailNotifications(groupSys_ID, groupName);
+        //Inbound Email Actions
+        results += this.checkInboundActions(groupSys_ID, groupName);
+        //System Properties
+        results += this.checkSystemProperties(groupSys_ID, groupName);
+        //Workflow Fulfillment
+        results += this.checkWorkflowVariables(groupSys_ID, groupName);
+        //WorkFlow Scripts
+        results += this.checkWorkflowScripts(groupSys_ID, groupName);
+        //Business Service
+        results += this.checkBusinessServices(groupSys_ID, groupName);
+        // Catalog Items
+        results += this.checkCatalogItems(groupSys_ID, groupName);
+        //Business Rules
+        results += this.checkBusinessRules(groupSys_ID, groupName);
+        //Client Scripts
+        results += this.checkClientScripts(groupSys_ID, groupName);
+        //Scheduled Jobs
+        results += this.checkScheduledJobs(groupSys_ID, groupName);
+        //UI Action
+        results += this.checkUIActions(groupSys_ID, groupName);
+        //ACL
+        results += this.checkACL(groupSys_ID, groupName);
+        //UI Policy
+        results += this.checkUIPolicies(groupSys_ID, groupName);
+        //Record Producer
+        results += this.checkRecordProducers(groupSys_ID, groupName);
+        // Script Includes
+        results += this.checkScriptIncludes(groupSys_ID, groupName);
+        //Email Scripts
+        results += this.checkEmailScripts(groupSys_ID, groupName);
+
+        return results;
+
+    },
+
+    // Check Active tasks
+    checkActiveTasks: function(groupSys_ID, groupName) {
+        var results = "";
+        queryString = 'active=true^assignment_group=' + groupSys_ID;
+        var count = new GlideAggregate('task');
+        count.addEncodedQuery(queryString);
+        count.addAggregate('COUNT');
+        count.query();
+        var tasks = 0;
+        if (count.next())
+            tasks = count.getAggregate('COUNT');
+        results += "Number of Active tasks assigned to group " + groupName + ": " + tasks + '\n';
+
+        return results;
+    },
+
+    //check email notifications
+    checkEmailNotifications: function(groupSys_ID, groupName) {
+        var results = "";
+        queryString = 'active=true^recipient_groups=' + groupSys_ID + '^ORconditionLIKE' + groupSys_ID + '^ORadvanced_conditionLIKE' + groupSys_ID + '^ORadvanced_conditionLIKE' + groupName;
+        var gAgg = new GlideAggregate('sysevent_email_action');
+        gAgg.addEncodedQuery(queryString);
+        gAgg.addAggregate('COUNT');
+        gAgg.query();
+        var count = 0;
+        if (gAgg.next()) {
+            results += 'Group used in Email Notifications : ' + gAgg.getAggregate('COUNT') + '\n';
+            count = gAgg.getAggregate('COUNT');
+            if (count > 0) {
+                var emailAction = new GlideRecord('sysevent_email_action');
+                emailAction.addEncodedQuery(queryString);
+                emailAction.query();
+
+                while (emailAction.next()) {
+                    results += '--> Group needs to be removed from notification: ' + emailAction.name + ' - sys_id: ' + emailAction.sys_id + '\n';
+                }
+            }
+        }
+        return results;
+    },
+
+    //Check Inbound email Actions
+    checkInboundActions: function(groupSys_ID, groupName) {
+        var results = "";
+        queryString = 'active=true^scriptLIKE' + groupSys_ID + '^ORscriptLIKE' + groupName;
+        var gAgg = new GlideAggregate('sysevent_in_email_action');
+        gAgg.addEncodedQuery(queryString);
+        gAgg.addAggregate('COUNT');
+        gAgg.query();
+        var count = 0;
+        if (gAgg.next()) {
+            results += 'Group used in Inbound Email Action : ' + gAgg.getAggregate('COUNT') + '\n';
+            count = gAgg.getAggregate('COUNT');
+            if (count > 0) {
+                var inboundEmailAction = new GlideRecord('sysevent_in_email_action');
+                inboundEmailAction.addEncodedQuery(queryString);
+                inboundEmailAction.query();
+
+                while (inboundEmailAction.next()) {
+                    results += '--> Group needs to be removed from Inbound Action: ' + inboundEmailAction.name + ' - sys_id: ' + inboundEmailAction.sys_id + '\n';
+                }
+            }
+        }
+
+        return results;
+    },
+
+    //Check system properties
+    checkSystemProperties: function(groupSys_ID, groupName) {
+        var results = "";
+        queryString = 'valueLIKE' + groupSys_ID + '^ORvalueLIKE' + groupName;
+        var gAgg = new GlideAggregate('sys_properties');
+        gAgg.addEncodedQuery(queryString);
+        gAgg.addAggregate('COUNT');
+        gAgg.query();
+        var count = 0;
+        if (gAgg.next()) {
+            results += ' Group used in System Properties : ' + gAgg.getAggregate('COUNT') + '\n';
+            count = gAgg.getAggregate('COUNT');
+            if (count > 0) {
+                var systemProperties = new GlideRecord('sys_properties');
+                systemProperties.addEncodedQuery(queryString);
+                systemProperties.query();
+                while (systemProperties.next()) {
+                    results += '--> Group needs to be removed from System Properties: ' + systemProperties.name + ' - sys_id: ' + systemProperties.sys_id + '\n';
+                }
+            }
+        }
+        return results;
+    },
+
+    //check workflow fulfillment variables
+    checkWorkflowVariables: function(groupSys_ID, groupName) {
+        var results = "";
+        //check workflow fulfillment variable
+        queryString = 'document=wf_activity^value=' + groupSys_ID + '^ORvalueSTARTSWITH' + groupName + '^ORDERBYorder';
+        var gAgg = new GlideAggregate('sys_variable_value');
+        gAgg.addEncodedQuery(queryString);
+        gAgg.addAggregate('COUNT');
+        gAgg.query();
+        var count = 0;
+        if (gAgg.next()) {
+
+            results += ' Group used in Workflow Variables(sys_variable_value), number contains both Active and Inactive workflows but detail result is for only active workflows : ' + gAgg.getAggregate('COUNT') + '\n';
+            count = gAgg.getAggregate('COUNT');
+            if (count > 0) {
+                var workflowVariable = new GlideRecord('sys_variable_value');
+                workflowVariable.addEncodedQuery(queryString);
+                workflowVariable.query();
+                var workflowActivityVariable = new GlideRecord('wf_activity');
+                while (workflowVariable.next()) {
+                    if (workflowActivityVariable.get(workflowVariable.document_key))
+                        if (workflowActivityVariable.workflow_version.published == true)
+                            results += '--> For Workflow: ' + workflowActivityVariable.workflow_version.name + ', activity needs group change: ' + workflowVariable.document_key.name + ' - variable: ' + workflowVariable.variable.label + ' - sys_id: ' + workflowVariable.sys_id + '\n';
+                }
+            }
+        }
+        return results;
+    },
+    //Check Workflow Scripts
+    checkWorkflowScripts: function(groupSys_ID, groupName) {
+        var results = "";
+        //check workflow script
+        queryString = 'document=wf_activity^variableLIKEscript^ORvariable.internal_type.nameLIKEscript^valueLIKE' + groupName + '^ORvalueLIKE' + groupSys_ID + '^ORDERBYorder';
+        var gAgg = new GlideAggregate('sys_variable_value');
+        gAgg.addEncodedQuery(queryString);
+        gAgg.addAggregate('COUNT');
+        gAgg.query();
+        var count = 0;
+        if (gAgg.next()) {
+            results += 'Group used in Workflow script,number contains both Active and Inactive workflows but detail result is for only active workflows :  ' + gAgg.getAggregate('COUNT') + '\n';
+            count = gAgg.getAggregate('COUNT');
+
+            if (count > 0) {
+                var workflowScript = new GlideRecord('sys_variable_value');
+                workflowScript.addEncodedQuery(queryString);
+                workflowScript.query();
+
+                var workflowActivityScript = new GlideRecord('wf_activity');
+                while (workflowScript.next()) {
+                    if (workflowActivityScript.get(workflowScript.document_key))
+                        if (workflowActivityScript.workflow_version.published == true)
+                            results += '--> For Workflow: ' + workflowActivityScript.workflow_version.name + ', script activity needs group change: ' + workflowScript.document_key.name + ' - sys_id: ' + workflowScript.sys_id + '\n';
+                }
+            }
+        }
+        return results;
+    },
+
+    //Check Business Services
+    checkBusinessServices: function(groupSys_ID, groupName) {
+        var results = "";
+        //check business services
+        queryString = "change_control=" + groupSys_ID + "^ORassignment_group=" + groupSys_ID + "^ORsupport_group=" + groupSys_ID + "^ORuser_group=" + groupSys_ID;
+        var gAgg = new GlideAggregate('cmdb_ci_service');
+        gAgg.addEncodedQuery(queryString);
+        gAgg.addAggregate('COUNT');
+        gAgg.query();
+        var count = 0;
+        if (gAgg.next()) {
+            results += 'Group used in Business Services : ' + gAgg.getAggregate('COUNT') + '\n';
+            count = gAgg.getAggregate('COUNT');
+
+            if (count > 0) {
+                var serviceRec = new GlideRecord('cmdb_ci_service');
+                serviceRec.addEncodedQuery(queryString);
+                serviceRec.query();
+
+                while (serviceRec.next()) {
+                    results += '--> Business service needs group change: ' + serviceRec.name + '\n';
+                }
+            }
+        }
+        return results;
+    },
+
+    //CHeck Catalog Items
+    checkCatalogItems: function(groupSys_ID, groupName) {
+        var results = "";
+        queryString = 'group=' + groupSys_ID;
+        var gAgg = new GlideAggregate('sc_cat_item');
+        gAgg.addEncodedQuery(queryString);
+        gAgg.addAggregate('COUNT');
+        gAgg.query();
+        var count = 0;
+        if (gAgg.next()) {
+            results += 'Group used in Catalog Items : ' + gAgg.getAggregate('COUNT') + '\n';
+            count = gAgg.getAggregate('COUNT');
+
+            if (count > 0) {
+                var catalogItem = new GlideRecord('sc_cat_item');
+                catalogItem.addEncodedQuery(queryString);
+                catalogItem.query();
+
+                while (catalogItem.next()) {
+                    results += '--> Catalog item needs group change: ' + catalogItem.name + ' - sys_id: ' + catalogItem.sys_id + '\n';
+                }
+            }
+        }
+        return results;
+    },
+
+    //Check Business Rules
+    checkBusinessRules: function(groupSys_ID, groupName) {
+        var results = "";
+        queryString = 'scriptLIKE' + groupName + '^ORscriptLIKE' + groupSys_ID;
+        var gAgg = new GlideAggregate('sys_script');
+        gAgg.addEncodedQuery(queryString);
+        gAgg.addAggregate('COUNT');
+        gAgg.query();
+        var count = 0;
+        if (gAgg.next()) {
+            results += 'Group used in Bsuiness Rules : ' + gAgg.getAggregate('COUNT') + '\n';
+            count = gAgg.getAggregate('COUNT');
+
+            if (count > 0) {
+                var businessRule = new GlideRecord('sys_script');
+                businessRule.addEncodedQuery(queryString);
+                businessRule.query();
+
+                while (businessRule.next()) {
+                    results += '--> Business rule needs group change: ' + businessRule.name + ' - sys_id: ' + businessRule.sys_id + '\n';
+                }
+            }
+        }
+        return results;
+    },
+
+    //Check Client Scripts
+    checkClientScripts: function(groupSys_ID, groupName) {
+        var results = "";
+        //check client scripts
+        queryString = 'scriptLIKE' + groupName + '^ORscriptLIKE' + groupSys_ID;
+        var gAgg = new GlideAggregate('sys_script_client');
+        gAgg.addEncodedQuery(queryString);
+        gAgg.addAggregate('COUNT');
+        gAgg.query();
+        var count = 0;
+        if (gAgg.next()) {
+            results += 'Group used in Client Scripts : ' + gAgg.getAggregate('COUNT') + '\n';
+            count = gAgg.getAggregate('COUNT');
+
+            if (count > 0) {
+                var clientScript = new GlideRecord('sys_script_client');
+                clientScript.addEncodedQuery(queryString);
+                clientScript.query();
+
+                while (clientScript.next()) {
+                    results += '--> Client script needs group change: ' + clientScript.name + ' - sys_id: ' + clientScript.sys_id + '\n';
+                }
+            }
+        }
+        return results;
+    },
+
+    //Scheduled Job Scripts
+    checkScheduledJobs: function(groupSys_ID, groupName) {
+        var results = "";
+        //scheduled job scripts
+        queryString = 'scriptLIKE' + groupName + '^ORscriptLIKE' + groupSys_ID;
+        var gAgg = new GlideAggregate('sysauto_script');
+        gAgg.addEncodedQuery(queryString);
+        gAgg.addAggregate('COUNT');
+        gAgg.query();
+        var count = 0;
+        if (gAgg.next()) {
+            results += 'Group used in Scheduled Jobs : ' + gAgg.getAggregate('COUNT') + '\n';
+            count = gAgg.getAggregate('COUNT');
+
+            if (count > 0) {
+                var scheduledJobScript = new GlideRecord('sysauto_script');
+                scheduledJobScript.addEncodedQuery(queryString);
+                scheduledJobScript.query();
+
+                while (scheduledJobScript.next()) {
+                    results += '--> Client script needs group change: ' + scheduledJobScript.name + ' - sys_id: ' + scheduledJobScript.sys_id + '\n';
+                }
+            }
+        }
+        return results;
+    },
+
+    //Check UI Actions
+    checkUIActions: function(groupSys_ID, groupName) {
+        var results = "";
+        //ui action scripts
+        queryString = 'scriptLIKE' + groupName + '^ORscriptLIKE' + groupSys_ID;
+        var gAgg = new GlideAggregate('sys_ui_action');
+        gAgg.addEncodedQuery(queryString);
+        gAgg.addAggregate('COUNT');
+        gAgg.query();
+        var count = 0;
+        if (gAgg.next()) {
+
+            results += 'Group used in UI Actions : ' + gAgg.getAggregate('COUNT') + '\n';
+            count = gAgg.getAggregate('COUNT');
+
+            if (count > 0) {
+                var uiAction = new GlideRecord('sys_ui_action');
+                uiAction.addEncodedQuery(queryString);
+                uiAction.query();
+
+                while (uiAction.next()) {
+                    results += '--> Client script needs group change: ' + uiAction.name + ' - sys_id: ' + uiAction.sys_id + '\n';
+                }
+            }
+        }
+        return results;
+    },
+
+    //Check ACL 
+    checkACL: function(groupSys_ID, groupName) {
+        var results = "";
+        queryString = 'scriptLIKE' + groupName + '^ORscriptLIKE' + groupSys_ID;
+        var gAgg = new GlideAggregate('sys_security_acl');
+        gAgg.addEncodedQuery(queryString);
+        gAgg.addAggregate('COUNT');
+        gAgg.query();
+        var count = 0;
+        if (gAgg.next()) {
+
+            results += 'Group used in ACLs : ' + gAgg.getAggregate('COUNT') + '\n';
+            count = gAgg.getAggregate('COUNT');
+
+            if (count > 0) {
+                var aclScript = new GlideRecord('sys_security_acl');
+                aclScript.addEncodedQuery(queryString);
+                aclScript.query();
+
+                while (aclScript.next()) {
+                    results += '--> ACL group change: ' + aclScript.name + ' - sys_id: ' + aclScript.sys_id + '\n';
+                }
+            }
+        }
+
+        return results;
+    },
+    //Check UI Policies
+    checkUIPolicies: function(groupSys_ID, groupName) {
+        var results = "";
+        queryString = 'script_falseLIKE' + groupName + '^ORscript_falseLIKE' + groupSys_ID + '^ORscript_trueLIKE' + groupName + '^ORscript_trueLIKE' + groupSys_ID;
+        var gAgg = new GlideAggregate('sys_ui_policy');
+        gAgg.addEncodedQuery(queryString);
+        gAgg.addAggregate('COUNT');
+        gAgg.query();
+        var count = 0;
+        if (gAgg.next()) {
+
+            results += 'Group used in UI Policies : ' + gAgg.getAggregate('COUNT') + '\n';
+            count = gAgg.getAggregate('COUNT');
+
+            if (count > 0) {
+                var uiPolicy = new GlideRecord('sys_ui_policy');
+                uiPolicy.addEncodedQuery(queryString);
+                uiPolicy.query();
+
+                while (uiPolicy.next()) {
+                    results += '--> UI policy group change: ' + uiPolicy.name + ' - sys_id: ' + uiPolicy.sys_id + '\n';
+                }
+            }
+        }
+        return results;
+    },
+
+    //Check Record Producers
+    checkRecordProducers: function(groupSys_ID, groupName) {
+        var results = "";
+        queryString = 'scriptLIKE' + groupName + '^ORscriptLIKE' + groupSys_ID;
+        var gAgg = new GlideAggregate('sc_cat_item_producer');
+        gAgg.addEncodedQuery(queryString);
+        gAgg.addAggregate('COUNT');
+        gAgg.query();
+        var count = 0;
+        if (gAgg.next()) {
+
+            results += 'Group used in Record Producers : ' + gAgg.getAggregate('COUNT') + '\n';
+            count = gAgg.getAggregate('COUNT');
+
+            if (count > 0) {
+                var recordProducer = new GlideRecord('sc_cat_item_producer');
+                recordProducer.addEncodedQuery(queryString);
+                recordProducer.query();
+
+                while (recordProducer.next()) {
+                    results += '--> Record producer group change: ' + recordProducer.name + ' - sys_id: ' + recordProducer.sys_id + '\n';
+                }
+            }
+        }
+        return results;
+    },
+
+    //Check Script Incudes
+    checkScriptIncludes: function(groupSys_ID, groupName) {
+        var results = "";
+        queryString = 'scriptLIKE' + groupName + '^ORscriptLIKE' + groupSys_ID;
+        var gAgg = new GlideAggregate('sys_script_include');
+        gAgg.addEncodedQuery(queryString);
+        gAgg.addAggregate('COUNT');
+        gAgg.query();
+        var count = 0;
+        if (gAgg.next()) {
+
+            results += 'Group used in Script Includes : ' + gAgg.getAggregate('COUNT') + '\n';
+            count = gAgg.getAggregate('COUNT');
+
+            if (count > 0) {
+                var scriptInclude = new GlideRecord('sys_script_include');
+                scriptInclude.addEncodedQuery(queryString);
+                scriptInclude.query();
+
+                while (scriptInclude.next()) {
+                    results += '--> Script include group change: ' + scriptInclude.name + ' - sys_id: ' + scriptInclude.sys_id + '\n';
+                }
+            }
+        }
+        return results;
+
+    },
+
+    //Check email Scripts
+    checkEmailScripts: function(groupSys_ID, groupName) {
+        var results = "";
+        queryString = 'scriptLIKE' + groupName + '^ORscriptLIKE' + groupSys_ID;
+        var gAgg = new GlideAggregate('sys_script_email');
+        gAgg.addEncodedQuery(queryString);
+        gAgg.addAggregate('COUNT');
+        gAgg.query();
+        var count = 0;
+        if (gAgg.next()) {
+
+            results += 'Group used in Email Scripts : ' + gAgg.getAggregate('COUNT') + '\n';
+            count = gAgg.getAggregate('COUNT');
+
+            if (count > 0) {
+                var mailScript = new GlideRecord('sys_script_email');
+                mailScript.addEncodedQuery(queryString);
+                mailScript.query();
+
+                while (mailScript.next()) {
+                    results += '--> Mail script group change: ' + mailScript.name + ' - sys_id: ' + mailScript.sys_id + '\n';
+                }
+            }
+        }
+        return results;
+    },
+
+    type: 'GroupDependencyUtilsNormal'
+};]]></script>
+<sys_class_name>sys_script_include</sys_class_name>
+<sys_created_by>admin</sys_created_by>
+<sys_created_on>2021-04-25 15:15:17</sys_created_on>
+<sys_id>7fbbe2a82f732010d826d5f62799b6d0</sys_id>
+<sys_mod_count>3</sys_mod_count>
+<sys_name>GroupDependencyUtilsNormal</sys_name>
+<sys_package display_value="Global" source="global">global</sys_package>
+<sys_policy/>
+<sys_scope display_value="Global">global</sys_scope>
+<sys_update_name>sys_script_include_7fbbe2a82f732010d826d5f62799b6d0</sys_update_name>
+<sys_updated_by>admin</sys_updated_by>
+<sys_updated_on>2021-05-01 14:52:37</sys_updated_on>
+</sys_script_include>
+</unload>
